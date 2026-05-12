@@ -58,16 +58,16 @@ void loop() {
 }
 
 void parseInput() {
-  char* cPtr = strstr(input, "CPU:");
+  char* gPtr = strstr(input, "GPU:");
   char* rPtr = strstr(input, "RAM:");
   
-  bool hadCpu = cPtr != nullptr;
+  bool hadGpu = gPtr != nullptr;
   bool hadRam = rPtr != nullptr;
   
-  if (cPtr) cpu = atoi(cPtr + 4);
+  if (gPtr) cpu = atoi(gPtr + 4);
   if (rPtr) ram = atoi(rPtr + 4);
   
-  if (hadCpu || hadRam) {
+  if (hadGpu || hadRam) {
     dataReceived = true;
     lastUpdate = millis(); 
   }
@@ -86,12 +86,12 @@ void updateScreen() {
   // --- CPU Блок ---
   display.setTextSize(2); 
   display.setCursor(0, 0);
-  display.print("CPU: ");
+  display.print("GPU: ");
   display.print(cpu);
   display.print("%");
   
   // Бар CPU (Y=18)
-  display.fillRect(0, 18, map(cpu, 0, 100, 0, 128), 8, SSD1306_WHITE);
+  display.fillRect(0, 18, map(cpu, 0, 100, 0, 128), 10, SSD1306_WHITE);
   
 
   // --- RAM Блок ---
@@ -107,7 +107,7 @@ void updateScreen() {
   // ВАША ПРАВКА: Опускаем еще на 2 пикселя -> 48.
   int ramBarY = 51; 
   
-  display.fillRect(0, ramBarY, map(ram, 0, 100, 0, 128), 8, SSD1306_WHITE);
+  display.fillRect(0, ramBarY, map(ram, 0, 100, 0, 128), 10, SSD1306_WHITE);
   
   display.display();
 }

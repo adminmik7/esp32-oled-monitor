@@ -1,10 +1,11 @@
-"""Send CPU load + RAM usage to ESP32 via USB Serial."""
+"""Send GPU load + RAM usage to ESP32 via USB Serial."""
 
 import time
 import sys
 import glob
 import os
 import subprocess
+import re
 
 BAUD = 115200
 UPDATE_INTERVAL = 1
@@ -21,10 +22,25 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pyserial", "--quiet"])
     import serial
 
+def get_gpu_load():
+    """Get GPU load from nvidia-smi."""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            lines = [l.strip() for l in result.stdout.strip().splitlines() if l.strip()]
+            if lines:
+                return int(float(lines[0]))
+    except:
+        pass
+    return 0
+
 def find_port():
     """Smart port detection for Windows."""
     if os.name == 'nt':
-        # Пробуем найти через WMI
+        # Пробуем найти через WMI (самый надежный способ для ESP)
         try:
             import wmi
             c = wmi.WMI()
@@ -37,7 +53,7 @@ def find_port():
         except: 
             pass
         
-        # Перебор портов
+        # Если WMI не сработал, перебираем порты
         for i in range(1, 20):
             port = f"COM{i}"
             try:
@@ -69,11 +85,15 @@ def main():
                 print(f"Connected on {port} @ {BAUD} baud")
                 
                 while True:
-                    cpu = psutil.cpu_percent(interval=0.5)
+                    gpu = get_gpu_load()
                     ram = psutil.virtual_memory().percent
-                    line = f"CPU:{int(cpu)}|RAM:{int(ram)}\n"
+                    line = f"GPU:{int(gpu)}|RAM:{int(ram)}\n"
                     ser.write(line.encode())
-                    print(f"Sent: CPU {int(cpu)}% | RAM {int(ram)}%", end='\r')
+                    
+                    # Если хочешь видеть ответ от ESP, раскомментируй строки ниже:
+                    # if ser.in_waiting:
+                    #     print(f" {line.strip()} -> {ser.readline().decode().strip()}")
+                    
                     time.sleep(UPDATE_INTERVAL)
         except (serial.SerialException, OSError):
             print("\n[!] Disconnected! Waiting for reconnection...")
