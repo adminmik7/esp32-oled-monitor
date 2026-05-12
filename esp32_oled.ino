@@ -11,6 +11,9 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 int cpu = 0; 
 int ram = 0;
 unsigned long lastUpdate = 0;
+bool dataReceived = false;
+unsigned long blinkTimer = 0;
+bool blinkState = false;
 
 char input[32]; 
 byte idx = 0;   
@@ -27,11 +30,9 @@ void setup() {
   display.setTextSize(1); 
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0,0);
-  display.println("  PC Monitor");
-  display.println("  ESP32 + OLED");
   display.display();
   
-  lastUpdate = millis() + 5000; 
+  lastUpdate = millis() + 3000;
   delay(2000); 
 }
 
@@ -48,8 +49,8 @@ void loop() {
     }
   }
 
-  if (millis() - lastUpdate >= 5000) {
-    showWait();
+  if (millis() - lastUpdate >= 3000) {
+    showNoDataBlink();
     return; 
   } else {
     updateScreen();
@@ -60,14 +61,26 @@ void parseInput() {
   char* cPtr = strstr(input, "CPU:");
   char* rPtr = strstr(input, "RAM:");
   
+  bool hadCpu = cPtr != nullptr;
+  bool hadRam = rPtr != nullptr;
+  
   if (cPtr) cpu = atoi(cPtr + 4);
   if (rPtr) ram = atoi(rPtr + 4);
   
-  lastUpdate = millis(); 
+  if (hadCpu || hadRam) {
+    dataReceived = true;
+    lastUpdate = millis(); 
+  }
   Serial.println("OK");
 }
 
 void updateScreen() {
+  if (!dataReceived) {
+    display.clearDisplay();
+    display.display();
+    return;
+  }
+  
   display.clearDisplay();
   
   // --- CPU Блок ---
@@ -99,14 +112,34 @@ void updateScreen() {
   display.display();
 }
 
+void showNoDataBlink() {
+  if (millis() - blinkTimer >= 500) {
+    blinkState = !blinkState;
+    blinkTimer = millis();
+  }
+  
+  display.clearDisplay();
+  
+  if (blinkState) {
+    display.fillRect(120, 0, 5, 5, SSD1306_WHITE);
+  }
+  
+  display.display();
+}
+
 void showWait() {
+  if (!dataReceived) {
+    display.clearDisplay();
+    display.display();
+    return;
+  }
+  
   display.clearDisplay();
   display.setTextSize(2);
   
   // Центрируем текст и опускаем на уровень ниже середины экрана
   // (Текст шрифтом 2 занимает ~11-12px, высота экрана 64. Центр Y=32.)
   display.setCursor((128 - 45) / 2, 34); 
-  display.print("WAIT");
   
   display.display();
 }
