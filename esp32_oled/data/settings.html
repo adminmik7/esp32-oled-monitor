@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings - ESP32 Monitor</title>
+<style>
+  * { margin: 0; box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+  body { background: #050508; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; color: #fff; }
+  .wrap { width: 100%; max-width: 28rem; }
+  .header { text-align: center; margin-bottom: 2.5rem; }
+  .header h1 { font-size: 1.875rem; font-weight: 700; letter-spacing: -0.025em; margin-bottom: 0.5rem; }
+  .header a { color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.875rem; transition: color 0.2s; }
+  .header a:hover { color: #10b981; }
+  .glass { background: rgba(255,255,255,0.02); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.06); border-radius: 1rem; padding: 2rem; }
+  .field { margin-bottom: 1.25rem; }
+  .field label { display: block; font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem; }
+  .field input { width: 100%; padding: 0.75rem 1rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 0.75rem; color: #fff; font-size: 1rem; outline: none; transition: all 0.3s; }
+  .field input:focus { background: rgba(255,255,255,0.05); border-color: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.1); }
+  .pass-wrap { position: relative; }
+  .pass-wrap input { padding-right: 3rem; }
+  .pass-toggle { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: #6b7280; cursor: pointer; padding: 0; display: flex; align-items: center; }
+  .pass-toggle svg { width: 1.25rem; height: 1.25rem; }
+  .btn { width: 100%; padding: 0.75rem 1rem; background: linear-gradient(135deg, #059669, #10b981); color: #fff; font-weight: 600; font-size: 1rem; border: none; border-radius: 0.75rem; cursor: pointer; transition: all 0.3s; }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(16,185,129,0.3); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <h1>Настройки WiFi</h1>
+    <a href="/">&#8592; Назад к мониторингу</a>
+  </div>
+
+  <div class="glass">
+    <form method="POST" action="/settings" id="wifi-form">
+      <div class="field">
+        <label>SSID сети</label>
+        <input type="text" id="ssid-input" name="ssid" value="" required>
+      </div>
+
+      <div class="field">
+        <label>Пароль</label>
+        <div class="pass-wrap">
+          <input type="password" id="pass-input" name="pass" value="" required>
+          <button type="button" class="pass-toggle" onclick="togglePass()">
+            <svg id="eye-on" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <svg id="eye-off" class="hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.39m3.04-3.6a1.016 1.016 0 000-1.278 1.015 1.015 0 00-1.278 0A10.473 10.473 0 0112 19.5c-4.638 0-8.573-3.007-9.963-7.178a1.015 1.015 0 00-.39-.638m7.278 3.6c1.458 1.458 3.81 1.458 5.268 0"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn">Сохранить</button>
+    </form>
+  </div>
+
+</div>
+<script>
+function togglePass(){
+  var i=document.getElementById('pass-input');
+  if(i.type==='password'){
+    i.type='text';
+    document.getElementById('eye-on').classList.add('hidden');
+    document.getElementById('eye-off').classList.remove('hidden');
+  } else {
+    i.type='password';
+    document.getElementById('eye-on').classList.remove('hidden');
+    document.getElementById('eye-off').classList.add('hidden');
+  }
+}
+
+async function loadSettings(){
+  try{
+    const r=await fetch('/api/settings');
+    if(r.ok){
+      const d=await r.json();
+      document.getElementById('ssid-input').value=d.ssid||'';
+      document.getElementById('pass-input').value=d.pass||'';
+    }
+  }catch(e){}
+}
+loadSettings();
+</script>
+</body>
+</html>

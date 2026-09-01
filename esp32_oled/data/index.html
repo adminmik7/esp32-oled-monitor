@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32 Monitor</title>
+<style>
+  * { margin: 0; box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+  body { background: #050508; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; color: #fff; }
+  .wrap { width: 100%; max-width: 32rem; }
+  .header { text-align: center; margin-bottom: 2.5rem; }
+  .header h1 { font-size: 2.25rem; font-weight: 700; letter-spacing: -0.025em; margin-bottom: 0.25rem; }
+  .header p { font-size: 0.875rem; color: #4b5563; font-weight: 300; }
+  .card { background: rgba(255,255,255,0.02); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.06); border-radius: 1rem; padding: 1.75rem; margin-bottom: 1rem; transition: border-color 0.3s; }
+  .card:hover { border-color: rgba(255,255,255,0.1); }
+  .card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+  .card-label { display: flex; align-items: center; gap: 0.75rem; }
+  .dot { width: 0.625rem; height: 0.625rem; border-radius: 50%; animation: shimmer 2s ease-in-out infinite; }
+  .dot-green { background: #10b981; box-shadow: 0 0 10px rgba(16,185,129,0.3); }
+  .dot-teal { background: #2dd4bf; box-shadow: 0 0 10px rgba(45,212,191,0.3); }
+  .card-label span { font-size: 0.875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: #9ca3af; }
+  .val { font-size: 2.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .val small { font-size: 0.875rem; color: #6b7280; margin-left: 0.25rem; }
+  canvas.chart { width: 100%; height: 64px; display: block; border-radius: 8px; }
+  .status { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 2rem; }
+  .status-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: #374151; animation: shimmer 2s ease-in-out infinite; }
+  .status-text { font-size: 0.75rem; color: #4b5563; }
+  .footer { text-align: center; margin-top: 1.5rem; }
+  .footer a { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.75rem; font-weight: 500; color: #374151; text-decoration: none; padding: 0.5rem 1rem; border-radius: 0.5rem; transition: color 0.2s, border-color 0.2s; border: 1px solid transparent; }
+  .footer a:hover { color: #10b981; border-color: rgba(255,255,255,0.05); }
+  .footer a svg { width: 0.875rem; height: 0.875rem; }
+  @keyframes shimmer { 0%{opacity:0.6} 50%{opacity:1} 100%{opacity:0.6} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <h1>ESP32 Monitor</h1>
+    <p>GPU &amp; RAM в реальном времени</p>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="card-label">
+        <span class="dot dot-green"></span>
+        <span>GPU</span>
+      </div>
+      <span id="gpu-val" class="val">--<small>%</small></span>
+    </div>
+    <canvas id="gpu-chart" class="chart"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="card-label">
+        <span class="dot dot-teal"></span>
+        <span>RAM</span>
+      </div>
+      <span id="ram-val" class="val">--<small>%</small></span>
+    </div>
+    <canvas id="ram-chart" class="chart"></canvas>
+  </div>
+
+  <div class="status">
+    <span id="status-dot" class="status-dot"></span>
+    <span id="status-text" class="status-text">Подключение...</span>
+  </div>
+
+  <div class="footer">
+    <a href="/settings">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31 2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      Настройки WiFi
+    </a>
+  </div>
+
+</div>
+<script>
+const dot = document.getElementById('status-dot');
+const stxt = document.getElementById('status-text');
+
+const MAX_POINTS = 60;
+let gpuHistory = new Array(MAX_POINTS).fill(null);
+let ramHistory = new Array(MAX_POINTS).fill(null);
+let gpuIdx = 0;
+let ramIdx = 0;
+
+function setStatus(ok){
+  if(ok){
+    dot.className='status-dot dot-green';
+    stxt.style.color='#10b981';
+    stxt.textContent='Онлайн — данные поступают';
+  } else {
+    dot.className='status-dot';
+    dot.style.background='#f59e0b';
+    dot.style.boxShadow='0 0 10px rgba(245,158,11,0.3)';
+    stxt.style.color='#f59e0b';
+    stxt.textContent='Оффлайн — данных нет';
+  }
+}
+
+function drawChart(canvasId, history, writeIdx, color1, color2){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width;
+  const H = rect.height;
+
+  ctx.clearRect(0, 0, W, H);
+
+  const startIdx = history[writeIdx] === null
+    ? history.indexOf(history.find(v => v !== null))
+    : writeIdx;
+  if(startIdx === -1) return;
+
+  const vals = [];
+  for(let i = 0; i < MAX_POINTS; i++){
+    const idx = (startIdx + i) % MAX_POINTS;
+    if(history[idx] === null) break;
+    vals.push(history[idx]);
+  }
+  if(vals.length < 2) return;
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  for(let i = 1; i < 10; i++){
+    const x = (i / 10) * W;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  for(let i = 0; i <= 5; i++){
+    const y = (i / 5) * H;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+
+  const pts = vals.map((v, i) => ({
+    x: (i / (MAX_POINTS - 1)) * W,
+    y: H - (v / 100) * H
+  }));
+
+  function addCurve(){
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i = 1; i < pts.length; i++){
+      const prev = pts[i-1], curr = pts[i];
+      const cpx = (prev.x + curr.x) / 2;
+      ctx.quadraticCurveTo(prev.x, prev.y, cpx, (prev.y + curr.y) / 2);
+      if(i === pts.length - 1) ctx.lineTo(curr.x, curr.y);
+    }
+  }
+
+  ctx.beginPath();
+  addCurve();
+  ctx.strokeStyle = color2;
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+}
+
+async function fetchStatus(){
+  try{
+    const r=await fetch('/status');
+    if(!r.ok) throw 0;
+    const d=await r.json();
+
+    const online = d.ts > 0 && Math.floor(Date.now()/1000) - d.ts < 5;
+    setStatus(online);
+
+    if(!online) return;
+
+    document.getElementById('gpu-val').innerHTML=d.gpu+'<small>%</small>';
+    document.getElementById('ram-val').innerHTML=d.ram+'<small>%</small>';
+
+    gpuHistory[gpuIdx] = d.gpu;
+    gpuIdx = (gpuIdx + 1) % MAX_POINTS;
+    ramHistory[ramIdx] = d.ram;
+    ramIdx = (ramIdx + 1) % MAX_POINTS;
+
+    drawChart('gpu-chart', gpuHistory, gpuIdx, '#059669', '#34d399');
+    drawChart('ram-chart', ramHistory, ramIdx, '#0d9488', '#2dd4bf');
+  } catch(e){
+    setStatus(false);
+  }
+}
+fetchStatus();
+setInterval(fetchStatus,1000);
+</script>
+</body>
+</html>
